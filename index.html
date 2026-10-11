@@ -97,6 +97,8 @@ details[open] .chev{transform:rotate(90deg)}
 .keyin:focus{border-color:var(--accent)}
 .chip.perm{box-shadow:inset 0 0 0 2px var(--gold)}
 .chip.perm .pin{background:#f6e7c1}
+@media(min-width:700px){.frow{flex-wrap:wrap;overflow:visible}}
+.f[data-f="all"]{border-color:var(--gold)}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -115,7 +117,8 @@ details[open] .chev{transform:rotate(90deg)}
   <section class="tab active" id="tab-rec">
     <div class="filters">
       <div class="flabel">Type</div><div class="frow" id="fType"></div>
-      <div class="flabel">Intention</div><div class="frow" id="fInt"></div>
+      <div class="flabel">Style &amp; Régime</div><div class="frow" id="fStyle"></div>
+      <div class="flabel">Intention &amp; Contrainte</div><div class="frow" id="fInt"></div>
     </div>
     <button class="ai" id="genAI">✨ Générer des recettes avec l'IA</button>
     <div class="grid" id="recipes"></div>
@@ -168,26 +171,35 @@ const CATS=[
 ];
 const DEF_STAPLES=["Huile d'olive","Sel","Poivre","Ail","Oignon"];
 const FILTERS=[
- {id:'ultra',g:'t',l:'⚡ Ultra-rapide (<15 min)',kw:'rapide'},{id:'quotidien',g:'t',l:'🍲 Plats du quotidien',kw:'quotidien'},
+ {id:'entree',g:'t',l:'🥗 Entrées & Salades',kw:'entree'},{id:'plat',g:'t',l:'🍲 Plats principaux',kw:'plat'},
  {id:'apero',g:'t',l:'🍸 Apéro & Tapas',kw:'apero'},{id:'dessert',g:'t',l:'🍰 Desserts & Goûters',kw:'dessert'},
- {id:'boisson',g:'t',l:'🥤 Boissons & Cocktails',kw:'boisson'},
- {id:'vider',g:'i',l:'🧹 Vider le frigo (Anti-gaspi)',kw:'frigo'},{id:'saison',g:'i',l:'🌞 De saison',kw:'saison'},
- {id:'confort',g:'i',l:'🍫 Réconfort',kw:'confort'},{id:'leger',g:'i',l:'🥗 Léger & Équilibré',kw:'leger'},{id:'onepot',g:'i',l:'🍳 One-pot',kw:'one'}
+ {id:'boisson',g:'t',l:'🥤 Boissons & Cocktails',kw:'boisson'},{id:'sauce',g:'t',l:'🫙 Sauces & Tartinables',kw:'sauce'},
+ {id:'vege',g:'r',l:'🌱 Végétarien',kw:'vege'},{id:'monde',g:'r',l:'🌍 Cuisine du monde',kw:'monde'},
+ {id:'sanscuisson',g:'r',l:'❄️ Sans cuisson',kw:'sans cuisson'},{id:'mealprep',g:'r',l:'🍱 Meal Prep / À emporter',kw:'meal'},
+ {id:'all',g:'i',l:'💯 100% Ingrédients possédés',kw:'zzz-none'},{id:'express',g:'i',l:'⚡ Express (<15 min)',kw:'express'},
+ {id:'vider',g:'i',l:'🧹 Anti-gaspi (Vider le frigo)',kw:'gaspi'},{id:'saison',g:'i',l:'🌞 De saison',kw:'saison'},
+ {id:'confort',g:'i',l:'🍫 Réconfort & Convivial',kw:'confort'},{id:'leger',g:'i',l:'🥗 Léger & Équilibré',kw:'leger'},
+ {id:'onepot',g:'i',l:'🍳 One-pot',kw:'one'},{id:'budget',g:'i',l:'💶 Petit budget',kw:'budget'}
 ];
 const R=(title,min,theme,tags,ing)=>({title,minutes:min,prepTime:min+' min',theme,tags,ingredients:ing});
 const MOCK=[
- R('Salade tomate-féta',10,'Ultra-rapide',['ultra','leger','saison','vider'],['Tomate','Féta',"Huile d'olive",'Oignon']),
- R("Spaghetti à l'ail et au parmesan",15,'Plat du quotidien',['ultra','quotidien','confort'],['Pâtes','Ail','Parmesan',"Huile d'olive"]),
- R('Omelette aux champignons',12,'Ultra-rapide',['ultra','quotidien','vider'],['Oeuf','Champignon','Beurre','Sel']),
- R('Poulet rôti aux pommes de terre',55,'Réconfort',['quotidien','confort','onepot'],['Poulet','Pomme de terre','Ail',"Huile d'olive"]),
- R('Risotto aux courgettes',35,'One-pot',['onepot','confort','quotidien','saison'],['Riz','Courgette','Oignon','Parmesan']),
- R('Tapenade et toasts',10,'Apéro',['apero','ultra'],['Olive','Pain','Ail',"Huile d'olive"]),
- R('Mousse au chocolat',25,'Dessert',['dessert','confort'],['Chocolat','Oeuf','Sucre']),
- R('Crumble aux pommes',45,'Dessert',['dessert','confort','saison'],['Pomme','Farine','Beurre','Sucre']),
- R('Mojito',5,'Boisson',['boisson','apero','ultra'],['Menthe','Citron vert','Sucre','Rhum']),
- R('Curry de pois chiches',30,'One-pot',['onepot','leger','quotidien','vider'],['Pois chiche','Lait de coco','Oignon','Curry','Riz']),
- R('Houmous maison',10,'Apéro',['apero','leger','ultra'],['Pois chiche','Ail','Citron',"Huile d'olive"]),
- R('Soupe de légumes',35,'Léger',['leger','onepot','saison','vider'],['Carotte','Poireau','Pomme de terre','Oignon'])
+ R('Salade tomate-féta',10,'Entrée & Salade',['entree','express','leger','saison','vege','sanscuisson','vider','budget'],['Tomate','Féta',"Huile d'olive",'Oignon']),
+ R("Spaghetti à l'ail et au parmesan",15,'Plat principal',['plat','vege','monde','confort','budget'],['Pâtes','Ail','Parmesan',"Huile d'olive"]),
+ R('Omelette aux champignons',12,'Plat principal',['plat','express','vege','vider','budget'],['Oeuf','Champignon','Beurre','Sel']),
+ R('Poulet rôti aux pommes de terre',55,'Plat principal',['plat','confort','onepot','mealprep'],['Poulet','Pomme de terre','Ail',"Huile d'olive"]),
+ R('Risotto aux courgettes',35,'Plat principal',['plat','vege','monde','onepot','confort','saison','vider'],['Riz','Courgette','Oignon','Parmesan']),
+ R('Tapenade et toasts',10,'Apéro & Tartinade',['apero','sauce','express','vege','sanscuisson','monde'],['Olive','Pain','Ail',"Huile d'olive"]),
+ R('Mousse au chocolat',25,'Dessert',['dessert','vege','confort','budget'],['Chocolat','Oeuf','Sucre']),
+ R('Crumble aux pommes',45,'Dessert',['dessert','vege','confort','saison','budget'],['Pomme','Farine','Beurre','Sucre']),
+ R('Mojito',5,'Boisson',['boisson','apero','express','vege','sanscuisson'],['Menthe','Citron vert','Sucre','Rhum']),
+ R('Curry de pois chiches',30,'Plat principal',['plat','vege','monde','onepot','leger','mealprep','budget','vider'],['Pois chiche','Lait de coco','Oignon','Curry','Riz']),
+ R('Houmous maison',10,'Sauce & Tartinade',['sauce','apero','vege','monde','sanscuisson','express','leger','budget'],['Pois chiche','Ail','Citron',"Huile d'olive"]),
+ R('Soupe de légumes',35,'Plat principal',['plat','vege','leger','onepot','saison','mealprep','budget','vider'],['Carotte','Poireau','Pomme de terre','Oignon']),
+ R('Taboulé frais',20,'Entrée & Salade',['entree','vege','monde','sanscuisson','mealprep','leger','saison','budget'],['Semoule','Tomate','Concombre','Menthe','Citron']),
+ R('Guacamole',10,'Sauce & Tartinade',['sauce','apero','vege','monde','sanscuisson','express','leger'],['Avocat','Citron vert','Oignon','Sel']),
+ R('Pâtes au thon et à la tomate',20,'Plat principal',['plat','mealprep','budget','confort'],['Pâtes','Thon','Tomate','Oignon']),
+ R('Smoothie banane-lait',5,'Boisson',['boisson','vege','express','sanscuisson','leger'],['Banane','Lait','Miel']),
+ R('Quiche courgette-chèvre',50,'Plat principal',['plat','vege','mealprep','confort','vider'],['Oeuf','Crème','Courgette','Chèvre','Farine'])
 ];
 const DEMO_STOCK=[['Tomate',0],['Féta',1],['Oeuf',1],['Pâtes',2],['Parmesan',1],['Courgette',0],['Riz',2],['Citron',0],['Pomme de terre',0],['Carotte',0],['Pois chiche',2],['Beurre',1],['Farine',2],['Champignon',0]].map(([name,c])=>({name,category:CATS[c].n}));
 const MOCK_SCAN=[['Tomate',0],['Poulet',3],['Yaourt',1],['Chocolat',6],['Lait',1],['Brocoli',0],['Eau',7]].map(([name,c])=>({name,category:CATS[c].n}));
@@ -211,14 +223,14 @@ let S=load();
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.stock){
     if(d.staples){d.staples.filter(x=>x.on).forEach(x=>{if(!d.stock.some(y=>norm(y.name)===norm(x.name)))d.stock.push({name:x.name,category:CATS[4].n,perm:true})});delete d.staples}
     d.stock.forEach(x=>{if(x.perm===undefined&&DEF_STAPLES.some(n=>norm(n)===norm(x.name)))x.perm=true});
-    return d}}catch(e){}
+    d.filters=(d.filters||[]).filter(id=>FILTERS.some(f=>f.id===id));return d}}catch(e){}
   return{stock:[...DEMO_STOCK,...DEF_STAPLES.map(name=>({name,category:CATS[4].n,perm:true}))],filters:[],aiRecipes:null,apiKey:''}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ============ COUCHE IA (Google Gemini) – fonctions isolées ============ */
-const GEMINI_MODEL='gemini-3.8-flash';
+const GEMINI_MODEL='gemini-2.5-flash';
 const PROMPT_VISION=`Analyse cette image de liste/ticket/frigo. Extrais uniquement les aliments comestibles. Standardise chaque nom : au singulier, en français, sans marque, sans poids ni volume (ex: écrire 'Tomate' et JAMAIS 'Tomates cerises bio 500g'). Associe chaque aliment à l'une des 8 catégories définies : ${CATS.map(c=>c.n).join(' | ')}. Réponds au format JSON strict : [{"name": "Tomate", "category": "Légumes & Fruits"}]`;
-const promptRecipes=list=>`À partir de cet inventaire d'aliments : [${list.join(', ')}], propose 4 recettes réelles et populaires. Priorise les recettes utilisant le maximum d'ingrédients du stock. Le champ theme doit être l'un de : Ultra-rapide, Plat du quotidien, Apéro, Dessert, Boisson, Anti-gaspi, De saison, Réconfort, Léger, One-pot. Réponds au format JSON strict : [{"title":"Nom de la recette","prepTime":"15 min","theme":"Ultra-rapide","usedIngredients":["Tomate","Féta"],"missingIngredients":["Huile d'olive"],"recipeUrl":"https://www.marmiton.org/recettes/recherche.aspx?aqt=tomate+feta"}]`;
+const promptRecipes=list=>`À partir de cet inventaire d'aliments : [${list.join(', ')}], propose 4 recettes réelles et populaires. Priorise les recettes utilisant le maximum d'ingrédients du stock. Le champ theme contient un ou plusieurs thèmes séparés par des virgules, choisis parmi : Entrée, Plat principal, Apéro, Dessert, Boisson, Sauce, Végétarien, Cuisine du monde, Sans cuisson, Meal prep, Express, Anti-gaspi, De saison, Réconfort, Léger, One-pot, Petit budget. Réponds au format JSON strict : [{"title":"Nom de la recette","prepTime":"15 min","theme":"Ultra-rapide","usedIngredients":["Tomate","Féta"],"missingIngredients":["Huile d'olive"],"recipeUrl":"https://www.marmiton.org/recettes/recherche.aspx?aqt=tomate+feta"}]`;
 
 async function callGemini(parts){
   const cleanKey=(S.apiKey||'').trim();
@@ -271,19 +283,19 @@ function renderStock(){
 /* ============ RECETTES ============ */
 function renderFilters(){
   const mk=g=>FILTERS.filter(f=>f.g===g).map(f=>`<button class="f ${S.filters.includes(f.id)?'on':''}" data-f="${f.id}">${f.l}</button>`).join('');
-  $('#fType').innerHTML=mk('t');$('#fInt').innerHTML=mk('i');
+  $('#fType').innerHTML=mk('t');$('#fStyle').innerHTML=mk('r');$('#fInt').innerHTML=mk('i');
 }
 function tagsOf(r){
   if(r.tags&&r.tags.length)return r.tags;
-  const th=norm(r.theme||'');
-  return FILTERS.filter(f=>th.includes(f.kw)||(f.id==='ultra'&&r.minutes<15)).map(f=>f.id);
+  const th=(r.theme||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  return FILTERS.filter(f=>th.includes(f.kw)||(f.id==='express'&&r.minutes<15)).map(f=>f.id);
 }
 const searchUrl=t=>'https://www.marmiton.org/recettes/recherche.aspx?aqt='+encodeURIComponent(t).replace(/%20/g,'+');
 function renderRecipes(){
   const have=owned(),src=S.aiRecipes||MOCK;
-  const act=g=>S.filters.filter(id=>FILTERS.find(f=>f.id===id).g===g);
+  const act=g=>S.filters.filter(id=>id!=='all'&&FILTERS.find(f=>f.id===id).g===g);
   const list=src.map(r=>({...r,used:r.ingredients.filter(i=>have.has(norm(i))),miss:r.ingredients.filter(i=>!have.has(norm(i)))}))
-    .filter(r=>{const t=tagsOf(r);return['t','i'].every(g=>!act(g).length||act(g).some(id=>t.includes(id)))})
+    .filter(r=>{const t=tagsOf(r);return(!S.filters.includes('all')||r.miss.length===0)&&['t','r','i'].every(g=>!act(g).length||act(g).some(id=>t.includes(id)))})
     .sort((a,b)=>b.used.length/b.ingredients.length-a.used.length/a.ingredients.length);
   $('#recipes').innerHTML=list.length?list.map(r=>`<article class="recipe" data-title="${esc(r.title)}">
     <h3>${esc(r.title)}</h3>
