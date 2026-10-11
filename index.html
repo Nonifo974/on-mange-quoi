@@ -164,6 +164,8 @@ details[open] .chev{transform:rotate(90deg)}
   <p class="hint">Modèle Gemini</p>
   <input class="keyin" id="modelIn" list="models" autocomplete="off" spellcheck="false" placeholder="gemini-3.8-flash">
   <datalist id="models"><option value="gemini-3.8-flash"><option value="gemini-3.7-flash"><option value="gemini-3.6-flash"><option value="gemini-3.5-flash"><option value="gemini-2.5-flash"></datalist>
+  <p class="hint">Modèle pour la recherche web</p>
+  <input class="keyin" id="searchIn" list="models" autocomplete="off" spellcheck="false" placeholder="gemini-2.5-flash">
   <p class="hint" id="keyState"></p>
   <button class="btn pri" id="saveKey" style="width:100%;margin-bottom:8px">Enregistrer la clé</button>
   <button class="btn sec" id="delKey" style="width:100%">Supprimer la clé (Mode Démo)</button>
@@ -253,10 +255,11 @@ const stockSig=()=>S.stock.map(x=>norm(x.name)).sort().join('|');
 const allRecipes=()=>[...(S.aiRecipes||[]),...((S.web&&S.web.list)||[])];
 async function loadWeb(force){
   if(!S.apiKey||!S.stock.length){renderRecipes();return}
-  const w=S.web;if(!force&&w&&w.sig===stockSig()&&Date.now()-w.ts<864e5){renderRecipes();return}   // cache 24 h tant que le stock ne change pas
+  const w=S.web;if(!force&&w&&w.sig===stockSig()&&Date.now()-w.ts<864e5){renderRecipes();return}
+  if(!force&&S.webFail&&S.webFail.sig===stockSig()&&Date.now()-S.webFail.ts<36e5){webErr=S.webFail.msg;renderRecipes();return}   // pas de nouvel essai automatique pendant 1 h après une erreur de quota   // cache 24 h tant que le stock ne change pas
   loadingWeb=true;webErr='';renderRecipes();
-  try{S.web={sig:stockSig(),ts:Date.now(),list:await fetchWebRecipes(S.stock.slice(0,40).map(x=>x.name))};save()}
-  catch(e){webErr=e.message}
+  try{S.web={sig:stockSig(),ts:Date.now(),list:await fetchWebRecipes(S.stock.slice(0,40).map(x=>x.name))};S.webFail=null;save()}
+  catch(e){webErr=e.message;if(e.quota){S.webFail={ts:Date.now(),sig:stockSig(),msg:e.message};save()}}
   loadingWeb=false;renderRecipes();
 }
 function renderWebStatus(){const el=$('#webStatus');if(!el)return;const n=(S.web&&S.web.list||[]).length;
@@ -271,15 +274,17 @@ async function createRecipes(list,filters,strict,n){   // API Text : recettes é
       servings:r.servings||n,items,ingredients:items.map(i=>i.name),steps:r.steps.map(String),tags:[]}});
 }
 
-async function geminiRaw(body){
+async function geminiRaw(body,model){
   const cleanKey=(S.apiKey||'').trim();
   if(!cleanKey) throw new Error('Aucune clé API configurée');
-  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${S.model||GEMINI_MODEL}:generateContent`,{
+  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model||S.model||GEMINI_MODEL}:generateContent`,{
     method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cleanKey},body:JSON.stringify(body)});
   if(!response.ok){
     const errorData=await response.json().catch(()=>({}));
     console.error('Détail erreur Gemini:',errorData);
-    throw new Error(errorData.error?.message||`Erreur HTTP ${response.status}`);
+    const msg=errorData.error?.message||`Erreur HTTP ${response.status}`,err=new Error(msg);
+    err.quota=response.status===429||/quota|RESOURCE_EXHAUSTED/i.test(msg+(errorData.error?.status||''));
+    throw err;
   }
   return response.json();
 }
@@ -289,11 +294,19 @@ async function callGemini(parts){                       // réponse JSON stricte
   return JSON.parse((textOf(d)||'[]').replace(/```json|```/g,'').trim());
 }
 async function callGeminiSearch(parts){                 // avec la recherche Google (grounding)
-  const d=await geminiRaw({contents:[{parts}],tools:[{google_search:{}}]});
-  const txt=textOf(d),a=txt.indexOf('['),b=txt.lastIndexOf(']');
-  if(a<0||b<a) throw new Error('Aucune recette trouvée dans la réponse');
-  const domains=(d.candidates?.[0]?.groundingMetadata?.groundingChunks||[]).map(c=>(c.web?.title||'').toLowerCase());
-  return{list:JSON.parse(txt.slice(a,b+1)),domains};
+  // Le grounding Gemini 3.x est exclu du palier gratuit : on essaie d'abord le modèle de recherche (2.5 par défaut), puis le modèle principal
+  const models=[...new Set([S.searchModel||'gemini-2.5-flash',S.model||GEMINI_MODEL])];let last;
+  for(const m of models){
+    try{
+      const d=await geminiRaw({contents:[{parts}],tools:[{google_search:{}}]},m);
+      const txt=textOf(d),a=txt.indexOf('['),b=txt.lastIndexOf(']');
+      if(a<0||b<a) throw new Error('Aucune recette trouvée dans la réponse');
+      const domains=(d.candidates?.[0]?.groundingMetadata?.groundingChunks||[]).map(c=>(c.web?.title||'').toLowerCase());
+      return{list:JSON.parse(txt.slice(a,b+1)),domains};
+    }catch(e){last=e;if(!e.quota)throw e}
+  }
+  last.message='La recherche Google de Gemini dépasse votre quota (elle est souvent exclue du palier gratuit). Activez la facturation dans Google AI Studio ou changez le modèle de recherche dans ⚙️.';
+  throw last;
 }
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function analyzeImage(base64,mime){            // API Vision
@@ -397,7 +410,7 @@ function openCat(name){editing=name;const it=S.stock.find(x=>x.name===name);if(!
   $('#catList').innerHTML=CATS.map(c=>`<button data-cat="${esc(c.n)}" style="--bgc:${c.bg};--c:${c.c}"><span>${c.i}</span><span>${c.n}</span>${c.n===it.category?'<b>✓</b>':''}</button>`).join('');
   openM('#catModal')}
 function setCat(cat){const it=S.stock.find(x=>x.name===editing);if(it){it.category=cat;save();renderStock();toast(`${it.name} → ${cat}`)}closeAll()}
-function openKey(){$('#keyIn').value=S.apiKey||'';$('#modelIn').value=S.model||GEMINI_MODEL;$('#keyState').textContent=S.apiKey?'IA activée (clé enregistrée).':'Mode démo (aucune clé enregistrée).';openM('#keyModal');setTimeout(()=>$('#keyIn').focus(),60)}
+function openKey(){$('#keyIn').value=S.apiKey||'';$('#modelIn').value=S.model||GEMINI_MODEL;$('#searchIn').value=S.searchModel||'gemini-2.5-flash';$('#keyState').textContent=S.apiKey?'IA activée (clé enregistrée).':'Mode démo (aucune clé enregistrée).';openM('#keyModal');setTimeout(()=>$('#keyIn').focus(),60)}
 
 function togglePerm(name){const it=S.stock.find(x=>x.name===name);if(!it)return;it.perm=!it.perm;save();renderStock();
   toast(it.perm?`📌 ${it.name} est maintenant permanent`:`📍 ${it.name} n'est plus permanent`)}
@@ -445,7 +458,7 @@ $('#genAI').onclick=generateAI;
 $('#refreshWeb').onclick=()=>loadWeb(true);
 $('#srv').onchange=e=>{S.servings=+e.target.value;save()};
 $('#cfg').onclick=openKey;
-$('#saveKey').onclick=()=>{const k=$('#keyIn').value.trim();if(!k)return toast("Collez d'abord votre clé API");S.apiKey=k;S.model=$('#modelIn').value.trim()||GEMINI_MODEL;save();closeAll();toast('Clé API enregistrée : IA activée');loadWeb(true)};
+$('#saveKey').onclick=()=>{const k=$('#keyIn').value.trim();if(!k)return toast("Collez d'abord votre clé API");S.apiKey=k;S.model=$('#modelIn').value.trim()||GEMINI_MODEL;S.searchModel=$('#searchIn').value.trim()||'gemini-2.5-flash';save();closeAll();toast('Clé API enregistrée : IA activée');loadWeb(true)};
 $('#delKey').onclick=()=>{S.apiKey='';save();closeAll();toast('Clé supprimée');renderRecipes()};
 $('#keyIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('#saveKey').click()});
 
