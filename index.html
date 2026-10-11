@@ -99,6 +99,16 @@ details[open] .chev{transform:rotate(90deg)}
 .chip.perm .pin{background:#f6e7c1}
 @media(min-width:700px){.frow{flex-wrap:wrap;overflow:visible}}
 .f[data-f="all"]{border-color:var(--gold)}
+.aibar{display:flex;gap:8px;align-items:center;margin:2px 0 14px}
+.aibar label{font-weight:700;font-size:.9rem;white-space:nowrap;color:var(--mute)}
+.aibar select{padding:10px 8px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);font-weight:700}
+.aibar .ai{margin:0;flex:1}
+.ai:disabled{opacity:.7}
+.rmh{font-size:1rem;margin:16px 0 8px}
+.rmul{list-style:none;padding:0;display:grid;gap:6px}
+.rmul li{padding:8px 14px;border-radius:999px;background:#ebe7df}
+.rmul li.have{background:#d9ebc9}
+.rmol{padding-left:22px;display:grid;gap:10px}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -120,7 +130,7 @@ details[open] .chev{transform:rotate(90deg)}
       <div class="flabel">Style &amp; Régime</div><div class="frow" id="fStyle"></div>
       <div class="flabel">Intention &amp; Contrainte</div><div class="frow" id="fInt"></div>
     </div>
-    <button class="ai" id="genAI">✨ Générer des recettes avec l'IA</button>
+    <div class="aibar"><label>Pour <select id="srv" aria-label="Nombre de personnes"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select> pers.</label><button class="ai" id="genAI">✨ Générer des recettes avec l'IA</button></div>
     <div class="grid" id="recipes"></div>
   </section>
 </main>
@@ -154,6 +164,12 @@ details[open] .chev{transform:rotate(90deg)}
   <button class="btn pri" id="saveKey" style="width:100%;margin-bottom:8px">Enregistrer la clé</button>
   <button class="btn sec" id="delKey" style="width:100%">Supprimer la clé (Mode Démo)</button>
 </div></div>
+<div class="modal" id="recModal" role="dialog" aria-modal="true" aria-label="Recette"><div class="sheet">
+  <h2><span id="rmTitle"></span><button class="icon-btn" data-close aria-label="Fermer">✕</button></h2>
+  <div class="badges" id="rmBadges"></div>
+  <h3 class="rmh">Ingrédients</h3><ul class="rmul" id="rmIng"></ul>
+  <h3 class="rmh">Préparation</h3><ol class="rmol" id="rmSteps"></ol>
+</div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -181,25 +197,17 @@ const FILTERS=[
  {id:'confort',g:'i',l:'🍫 Réconfort & Convivial',kw:'confort'},{id:'leger',g:'i',l:'🥗 Léger & Équilibré',kw:'leger'},
  {id:'onepot',g:'i',l:'🍳 One-pot',kw:'one'},{id:'budget',g:'i',l:'💶 Petit budget',kw:'budget'}
 ];
-const R=(title,min,theme,tags,ing)=>({title,minutes:min,prepTime:min+' min',theme,tags,ingredients:ing});
+const R=(title,min,theme,tags,ing,site,url)=>({title,minutes:min,prepTime:min+' min',theme,tags,ingredients:ing,site,url});
 const MOCK=[
- R('Salade tomate-féta',10,'Entrée & Salade',['entree','express','leger','saison','vege','sanscuisson','vider','budget'],['Tomate','Féta',"Huile d'olive",'Oignon']),
- R("Spaghetti à l'ail et au parmesan",15,'Plat principal',['plat','vege','monde','confort','budget'],['Pâtes','Ail','Parmesan',"Huile d'olive"]),
- R('Omelette aux champignons',12,'Plat principal',['plat','express','vege','vider','budget'],['Oeuf','Champignon','Beurre','Sel']),
- R('Poulet rôti aux pommes de terre',55,'Plat principal',['plat','confort','onepot','mealprep'],['Poulet','Pomme de terre','Ail',"Huile d'olive"]),
- R('Risotto aux courgettes',35,'Plat principal',['plat','vege','monde','onepot','confort','saison','vider'],['Riz','Courgette','Oignon','Parmesan']),
- R('Tapenade et toasts',10,'Apéro & Tartinade',['apero','sauce','express','vege','sanscuisson','monde'],['Olive','Pain','Ail',"Huile d'olive"]),
- R('Mousse au chocolat',25,'Dessert',['dessert','vege','confort','budget'],['Chocolat','Oeuf','Sucre']),
- R('Crumble aux pommes',45,'Dessert',['dessert','vege','confort','saison','budget'],['Pomme','Farine','Beurre','Sucre']),
- R('Mojito',5,'Boisson',['boisson','apero','express','vege','sanscuisson'],['Menthe','Citron vert','Sucre','Rhum']),
- R('Curry de pois chiches',30,'Plat principal',['plat','vege','monde','onepot','leger','mealprep','budget','vider'],['Pois chiche','Lait de coco','Oignon','Curry','Riz']),
- R('Houmous maison',10,'Sauce & Tartinade',['sauce','apero','vege','monde','sanscuisson','express','leger','budget'],['Pois chiche','Ail','Citron',"Huile d'olive"]),
- R('Soupe de légumes',35,'Plat principal',['plat','vege','leger','onepot','saison','mealprep','budget','vider'],['Carotte','Poireau','Pomme de terre','Oignon']),
- R('Taboulé frais',20,'Entrée & Salade',['entree','vege','monde','sanscuisson','mealprep','leger','saison','budget'],['Semoule','Tomate','Concombre','Menthe','Citron']),
- R('Guacamole',10,'Sauce & Tartinade',['sauce','apero','vege','monde','sanscuisson','express','leger'],['Avocat','Citron vert','Oignon','Sel']),
- R('Pâtes au thon et à la tomate',20,'Plat principal',['plat','mealprep','budget','confort'],['Pâtes','Thon','Tomate','Oignon']),
- R('Smoothie banane-lait',5,'Boisson',['boisson','vege','express','sanscuisson','leger'],['Banane','Lait','Miel']),
- R('Quiche courgette-chèvre',50,'Plat principal',['plat','vege','mealprep','confort','vider'],['Oeuf','Crème','Courgette','Chèvre','Farine'])
+ R("Salade de tomates et féta",20,'Entrée & Salade',['entree','vege','leger','saison','vider','budget'],['Tomate','Féta','Oignon',"Huile d'olive",'Vinaigre balsamique'],'WeightWatchers','https://www.weightwatchers.com/ch/fr/recette/salade-de-tomates-et-feta/5e54ec1c37fc18012afcea00'),
+ R('Salade grecque à ma façon',15,'Entrée & Salade',['entree','vege','leger','sanscuisson','saison','monde','budget'],['Concombre','Tomate','Oignon','Féta','Basilic','Olive',"Huile d'olive"],'Darty','https://www.darty.com/darty-et-vous/cuisine/idees-recettes/plats-principaux/salade-grecque-ma-facon'),
+ R('Salade de courgettes à la féta',35,'Entrée & Salade',['entree','vege','leger','saison','vider','mealprep'],['Courgette','Tomate','Oignon','Féta','Basilic','Olive',"Huile d'olive"],'24matins','https://www.24matins.fr/salade-de-courgettes-a-la-feta-la-recette-fraiche-qui-change-lete-1417684'),
+ R('Salade fraises, tomates, épinards et féta',10,'Entrée & Salade',['entree','vege','leger','sanscuisson','express','saison'],['Fraise','Tomate','Épinard','Féta','Noix',"Huile d'olive",'Vinaigre balsamique'],'Paris Match Belgique','https://www.parismatch.be/lifestyle/food/2021/06/07/la-recette-de-la-semaine-la-salade-ultra-rafraichissante-de-fraises-tomates-epinards-et-feta-GL752FYJQZB3NG4WOBDQXH4ACU/'),
+ R('Pâtes sauce aux olives et échalotes rôties',30,'Plat principal',['plat','vege','confort','monde','vider'],['Pâtes','Ail','Échalote','Olive','Parmesan',"Huile d'olive",'Menthe'],'Noovo Moi','https://www.noovomoi.ca/cuisiner/recettes/recette.sauce-aux-olives-et-aux-echalotes-roties.1.1314124.html'),
+ R('Curry de pois chiches, épinards et lait de coco',25,'Plat principal',['plat','vege','monde','onepot','leger','mealprep','budget','vider','confort'],['Pois chiche','Épinard','Oignon','Ail','Lait de coco',"Huile d'olive",'Curry'],'Futura','https://www.futura-sciences.com/sante/recettes/alimentation-vegetarien-curry-pois-chiches-epinards-lait-coco-350/'),
+ R('Houmous maison',10,'Sauce & Tartinade',['sauce','apero','vege','monde','sanscuisson','express','leger','budget'],['Pois chiche','Tahini','Ail','Citron',"Huile d'olive"],'Démotivateur','https://www.demotivateur.fr/food/recette/houmous-maison-2880'),
+ R('Mousse au chocolat',30,'Dessert',['dessert','vege','confort','budget'],['Chocolat','Oeuf','Lait','Sucre'],'Noovo Moi','https://www.noovomoi.ca/cuisiner/recettes/mousse-au-chocolat.html'),
+ R('Mojito traditionnel',10,'Boisson',['boisson','apero','vege','sanscuisson','express'],['Menthe','Citron vert','Sucre','Rhum','Eau gazeuse'],'Démotivateur','https://www.demotivateur.fr/food/recette/mojito-traditionnel-2359')
 ];
 const DEMO_STOCK=[['Tomate',0],['Féta',1],['Oeuf',1],['Pâtes',2],['Parmesan',1],['Courgette',0],['Riz',2],['Citron',0],['Pomme de terre',0],['Carotte',0],['Pois chiche',2],['Beurre',1],['Farine',2],['Champignon',0]].map(([name,c])=>({name,category:CATS[c].n}));
 const MOCK_SCAN=[['Tomate',0],['Poulet',3],['Yaourt',1],['Chocolat',6],['Lait',1],['Brocoli',0],['Eau',7]].map(([name,c])=>({name,category:CATS[c].n}));
@@ -219,18 +227,35 @@ let tT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('sh
 
 /* ============ ÉTAT & PERSISTANCE (localStorage → Firebase plus tard) ============ */
 const KEY='cuisine-v1';
-let S=load();
+let S=load();S.servings=S.servings||2;
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.stock){
     if(d.staples){d.staples.filter(x=>x.on).forEach(x=>{if(!d.stock.some(y=>norm(y.name)===norm(x.name)))d.stock.push({name:x.name,category:CATS[4].n,perm:true})});delete d.staples}
     d.stock.forEach(x=>{if(x.perm===undefined&&DEF_STAPLES.some(n=>norm(n)===norm(x.name)))x.perm=true});
-    d.filters=(d.filters||[]).filter(id=>FILTERS.some(f=>f.id===id));return d}}catch(e){}
+    d.filters=(d.filters||[]).filter(id=>FILTERS.some(f=>f.id===id));
+    if(d.aiRecipes&&!d.aiRecipes.every(r=>r.steps&&r.items))d.aiRecipes=null;return d}}catch(e){}
   return{stock:[...DEMO_STOCK,...DEF_STAPLES.map(name=>({name,category:CATS[4].n,perm:true}))],filters:[],aiRecipes:null,apiKey:''}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ============ COUCHE IA (Google Gemini) – fonctions isolées ============ */
 const GEMINI_MODEL='gemini-3.8-flash';
 const PROMPT_VISION=`Analyse cette image de liste/ticket/frigo. Extrais uniquement les aliments comestibles. Standardise chaque nom : au singulier, en français, sans marque, sans poids ni volume (ex: écrire 'Tomate' et JAMAIS 'Tomates cerises bio 500g'). Associe chaque aliment à l'une des 8 catégories définies : ${CATS.map(c=>c.n).join(' | ')}. Réponds au format JSON strict : [{"name": "Tomate", "category": "Légumes & Fruits"}]`;
-const promptRecipes=list=>`À partir de cet inventaire d'aliments : [${list.join(', ')}], propose 4 recettes réelles et populaires. Priorise les recettes utilisant le maximum d'ingrédients du stock. Le champ theme contient un ou plusieurs thèmes séparés par des virgules, choisis parmi : Entrée, Plat principal, Apéro, Dessert, Boisson, Sauce, Végétarien, Cuisine du monde, Sans cuisson, Meal prep, Express, Anti-gaspi, De saison, Réconfort, Léger, One-pot, Petit budget. Réponds au format JSON strict : [{"title":"Nom de la recette","prepTime":"15 min","theme":"Ultra-rapide","usedIngredients":["Tomate","Féta"],"missingIngredients":["Huile d'olive"],"recipeUrl":"https://www.marmiton.org/recettes/recherche.aspx?aqt=tomate+feta"}]`;
+const THEMES="Entrée, Plat principal, Apéro, Dessert, Boisson, Sauce, Végétarien, Cuisine du monde, Sans cuisson, Meal prep, Express, Anti-gaspi, De saison, Réconfort, Léger, One-pot, Petit budget";
+const promptCreate=(list,filters,strict,n)=>`Tu es un chef cuisinier. À partir de cet inventaire d'aliments : [${list.join(', ')}], invente 3 recettes réalisables, pour ${n} personne${n>1?'s':''}. Utilise en priorité les ingrédients du stock${strict?" et UNIQUEMENT eux (plus eau, sel, poivre)":""}. ${filters.length?`Respecte ces catégories et contraintes : ${filters.join(' ; ')}.`:''} Donne les quantités exactes pour ${n} personne${n>1?'s':''} (ex : "300 g", "2 c. à soupe", "1 gousse"). Noms d'ingrédients au singulier, en français, sans marque. Le champ theme contient un ou plusieurs thèmes séparés par des virgules, choisis parmi : ${THEMES}. Réponds au format JSON strict : [{"title":"Nom de la recette","prepTime":"20 min","theme":"Plat principal, Végétarien","servings":${n},"ingredients":[{"name":"Tomate","quantity":"300 g"}],"steps":["Étape 1…","Étape 2…"]}]`;
+const demoAI=n=>[
+ {title:'Omelette féta-tomate',prepTime:'15 min',theme:'Plat principal, Express, Végétarien',servings:n,
+  ingredients:[{name:'Oeuf',quantity:`${2*n}`},{name:'Tomate',quantity:`${100*n} g`},{name:'Féta',quantity:`${30*n} g`},{name:'Beurre',quantity:`${10*n} g`},{name:'Sel',quantity:'1 pincée'}],
+  steps:['Coupez les tomates en dés et émiettez la féta.','Battez les œufs avec le sel.','Faites fondre le beurre dans une poêle à feu moyen, puis versez les œufs.','Quand l’omelette commence à prendre, ajoutez tomates et féta, repliez et servez après 1 minute.']},
+ {title:'Pâtes crémeuses courgette-parmesan',prepTime:'20 min',theme:'Plat principal, Réconfort, Végétarien',servings:n,
+  ingredients:[{name:'Pâtes',quantity:`${90*n} g`},{name:'Courgette',quantity:`${150*n} g`},{name:'Parmesan',quantity:`${25*n} g`},{name:'Ail',quantity:`${n} gousse${n>1?'s':''}`},{name:"Huile d'olive",quantity:`${n} c. à soupe`}],
+  steps:['Faites cuire les pâtes dans l’eau salée, gardez un verre d’eau de cuisson.','Râpez les courgettes et faites-les revenir 5 minutes avec l’ail haché et l’huile d’olive.','Ajoutez les pâtes égouttées et un peu d’eau de cuisson, mélangez à feu doux.','Hors du feu, incorporez le parmesan râpé et servez aussitôt.']}
+];
+async function createRecipes(list,filters,strict,n){   // API Text : recettes écrites par l'IA
+  const raw=S.apiKey?await callGemini([{text:promptCreate(list,filters,strict,n)}]):(await wait(1000),demoAI(n));
+  return raw.filter(r=>r&&r.title&&Array.isArray(r.ingredients)&&Array.isArray(r.steps)).map(r=>{
+    const items=r.ingredients.filter(i=>i&&i.name).map(i=>({name:cap(String(i.name)),quantity:String(i.quantity||'')}));
+    return{ai:true,title:r.title,prepTime:r.prepTime||'30 min',minutes:parseInt(r.prepTime)||30,theme:r.theme||'Recette IA',
+      servings:r.servings||n,items,ingredients:items.map(i=>i.name),steps:r.steps.map(String),tags:[]}});
+}
 
 async function callGemini(parts){
   const cleanKey=(S.apiKey||'').trim();
@@ -253,12 +278,6 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function analyzeImage(base64,mime){            // API Vision
   if(!S.apiKey){await wait(1300);return MOCK_SCAN}   // mode démo
   return callGemini([{text:PROMPT_VISION},{inline_data:{mime_type:mime,data:base64}}]);
-}
-async function fetchRecipes(list){                    // API Text
-  if(!S.apiKey){await wait(900);return null}         // null = recettes démo
-  const out=await callGemini([{text:promptRecipes(list)}]);
-  return out.map(r=>({title:r.title,prepTime:r.prepTime,minutes:parseInt(r.prepTime)||30,theme:r.theme||'',
-    tags:[],ingredients:[...(r.usedIngredients||[]),...(r.missingIngredients||[])],url:r.recipeUrl}));
 }
 
 /* ============ INVENTAIRE ============ */
@@ -290,24 +309,23 @@ function tagsOf(r){
   const th=(r.theme||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   return FILTERS.filter(f=>th.includes(f.kw)||(f.id==='express'&&r.minutes<15)).map(f=>f.id);
 }
-const searchUrl=t=>'https://www.marmiton.org/recettes/recherche.aspx?aqt='+encodeURIComponent(t).replace(/%20/g,'+');
 function renderRecipes(){
-  const have=owned(),src=S.aiRecipes||MOCK;
+  const have=owned(),src=[...(S.aiRecipes||[]),...MOCK];
   const act=g=>S.filters.filter(id=>id!=='all'&&FILTERS.find(f=>f.id===id).g===g);
   const list=src.map(r=>({...r,used:r.ingredients.filter(i=>have.has(norm(i))),miss:r.ingredients.filter(i=>!have.has(norm(i)))}))
-    .filter(r=>{const t=tagsOf(r);return(!S.filters.includes('all')||r.miss.length===0)&&['t','r','i'].every(g=>!act(g).length||act(g).some(id=>t.includes(id)))})
+    .filter(r=>{const t=tagsOf(r);return(!S.filters.includes('all')||r.miss.length===0)&&(r.ai||['t','r','i'].every(g=>!act(g).length||act(g).some(id=>t.includes(id))))})
     .sort((a,b)=>b.used.length/b.ingredients.length-a.used.length/a.ingredients.length);
   $('#recipes').innerHTML=list.length?list.map(r=>`<article class="recipe" data-title="${esc(r.title)}">
     <h3>${esc(r.title)}</h3>
-    <div class="badges"><span class="b">⏱ ${esc(r.prepTime)}</span><span class="b t">${esc(r.theme||'Recette')}</span></div>
+    <div class="badges"><span class="b">⏱ ${esc(r.prepTime)}</span>${r.ai?'<span class="b">✨ Écrite par l\'IA</span>':`<span class="b t">🌐 ${esc(r.site)}</span>`}<span class="b t">${esc(r.theme||'Recette')}</span></div>
     <div class="ing">${r.used.map(i=>`<span class="i have">${esc(i)}</span>`).join('')}${r.miss.map(i=>`<span class="i miss">${esc(i)}</span>`).join('')}</div>
     <div class="score">${r.used.length}/${r.ingredients.length} ingrédients disponibles</div>
-    <div class="acts"><a class="btn sec" target="_blank" rel="noopener" href="${esc(r.url||searchUrl(r.title))}">🔗 Voir la recette sur le web</a>
+    <div class="acts">${r.ai?`<button class="btn sec" data-view="${esc(r.title)}">📖 Voir la recette pour ${r.servings} personne${r.servings>1?'s':''}</button>`:`<a class="btn sec" target="_blank" rel="noopener noreferrer" href="${esc(r.url)}">🔗 Voir la recette sur le web</a>`}
     <button class="btn pri" data-cook="${esc(r.title)}">🧹 J'ai cuisiné ce plat</button></div></article>`).join('')
     :'<p class="empty">Aucune recette pour ces filtres. Essayez d\'en retirer un.</p>';
 }
 function cook(title,card){
-  const r=(S.aiRecipes||MOCK).find(x=>x.title===title);if(!r)return;
+  const r=[...(S.aiRecipes||[]),...MOCK].find(x=>x.title===title);if(!r)return;
   const names=new Set(r.ingredients.map(norm));
   const gone=S.stock.filter(s=>names.has(norm(s.name))&&!s.perm);   // les permanents (perm:true) restent
   S.stock=S.stock.filter(s=>!names.has(norm(s.name))||s.perm);save();
@@ -316,13 +334,14 @@ function cook(title,card){
   setTimeout(()=>{renderStock();renderRecipes()},900);
 }
 async function generateAI(){
-  const b=$('#genAI');b.innerHTML='<span class="spin" style="border-color:rgba(0,0,0,.2);border-top-color:#333"></span>Réflexion…';
+  if(!S.stock.length)return toast("Ajoutez d'abord des aliments à votre stock");
+  const b=$('#genAI');b.disabled=true;b.innerHTML='<span class="spin" style="border-color:rgba(0,0,0,.2);border-top-color:#333"></span>Écriture…';
   try{
-    const res=await fetchRecipes(S.stock.map(s=>s.name));
-    if(res){S.aiRecipes=res;save();toast('✨ Nouvelles recettes générées')}
-    else{S.aiRecipes=null;toast('Mode démo : ajoutez une clé Gemini via ⚙️')}
-  }catch(e){toast('Erreur IA : '+e.message+' (recettes démo conservées)')}
-  b.textContent="✨ Générer des recettes avec l'IA";renderRecipes();
+    const labels=S.filters.filter(id=>id!=='all').map(id=>FILTERS.find(f=>f.id===id).l.replace(/^\S+\s/,''));
+    S.aiRecipes=await createRecipes(S.stock.map(x=>x.name),labels,S.filters.includes('all'),S.servings);save();
+    toast(S.apiKey?'✨ Recettes écrites par l’IA':'✨ Exemples de recettes IA (mode démo)');
+  }catch(e){toast('Erreur IA : '+e.message)}
+  b.disabled=false;b.textContent="✨ Générer des recettes avec l'IA";renderRecipes();
 }
 
 /* ============ MODALE SCAN ============ */
@@ -361,11 +380,19 @@ function openKey(){$('#keyIn').value=S.apiKey||'';$('#keyState').textContent=S.a
 function togglePerm(name){const it=S.stock.find(x=>x.name===name);if(!it)return;it.perm=!it.perm;save();renderStock();
   toast(it.perm?`📌 ${it.name} est maintenant permanent`:`📍 ${it.name} n'est plus permanent`)}
 
+function openRecipe(title){const r=(S.aiRecipes||[]).find(x=>x.title===title);if(!r)return;const have=owned();
+  $('#rmTitle').textContent=r.title;
+  $('#rmBadges').innerHTML=`<span class="b">⏱ ${esc(r.prepTime)}</span><span class="b t">👥 ${r.servings} personne${r.servings>1?'s':''}</span><span class="b t">${esc(r.theme||'')}</span>`;
+  $('#rmIng').innerHTML=r.items.map(i=>`<li class="${have.has(norm(i.name))?'have':''}"><b>${esc(i.quantity)}</b> ${esc(i.name)}</li>`).join('');
+  $('#rmSteps').innerHTML=r.steps.map(x=>`<li>${esc(x)}</li>`).join('');
+  openM('#recModal')}
+
 /* ============ ÉVÉNEMENTS ============ */
 document.addEventListener('click',e=>{
   const ed=e.target.closest('[data-edit]');if(ed){openCat(ed.dataset.edit);return}
   const t=e.target.closest('button,a');if(!t)return;
   if(t.dataset.rm!==undefined)removeItem(t.dataset.rm,t.closest('.chip'));
+  else if(t.dataset.view!==undefined)openRecipe(t.dataset.view)
   else if(t.dataset.pin!==undefined)togglePerm(t.dataset.pin)
   else if(t.dataset.cat!==undefined)setCat(t.dataset.cat)
   else if(t.dataset.close!==undefined)closeAll()
@@ -393,12 +420,13 @@ $('#mchips').addEventListener('input',e=>{if(e.target.dataset.e!==undefined){fou
 $('#addAll').onclick=()=>{let n=0;found.forEach(f=>{if(f.name.trim()&&addItem(f.name,f.category,true))n++});
   closeModal();renderStock();renderRecipes();toast(`✅ ${n} aliment${n>1?'s':''} ajouté${n>1?'s':''} au stock`)};
 $('#genAI').onclick=generateAI;
+$('#srv').onchange=e=>{S.servings=+e.target.value;save()};
 $('#cfg').onclick=openKey;
 $('#saveKey').onclick=()=>{const k=$('#keyIn').value.trim();if(!k)return toast("Collez d'abord votre clé API");S.apiKey=k;save();closeAll();toast('Clé API enregistrée : IA activée')};
 $('#delKey').onclick=()=>{S.apiKey='';save();closeAll();toast('Clé supprimée : mode démo')};
 $('#keyIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('#saveKey').click()});
 
-renderStock();renderFilters();renderRecipes();
+renderStock();renderFilters();renderRecipes();$('#srv').value=S.servings;
 </script>
 </body>
 </html>
