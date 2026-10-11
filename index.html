@@ -222,18 +222,16 @@ const promptRecipes=list=>`À partir de cet inventaire d'aliments : [${list.join
 
 async function callGemini(parts){
   const cleanKey=(S.apiKey||'').trim();
-  if(!cleanKey) throw new Error('Aucune clé configurée');
-  const isBearer=cleanKey.startsWith('AQ.');   // jeton Google Cloud : en-tête Authorization ; sinon clé AIzaSy… : paramètre ?key=
-  const baseUrl=`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-  const url=isBearer?baseUrl:`${baseUrl}?key=${encodeURIComponent(cleanKey)}`;
-  const headers={'Content-Type':'application/json'};
-  if(isBearer) headers['Authorization']=`Bearer ${cleanKey}`;
-  const response=await fetch(url,{
-    method:'POST',headers,
+  if(!cleanKey) throw new Error('Aucune clé API configurée');
+  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':cleanKey},   // clé API (AIza… ou AQ…) : jamais d'en-tête Authorization
     body:JSON.stringify({contents:[{parts}],generationConfig:{responseMimeType:'application/json',temperature:.4}})});
   if(!response.ok){
     const errorData=await response.json().catch(()=>({}));
-    throw new Error(errorData.error?.message||`Erreur ${response.status}`);
+    const msg=errorData.error?.message||`Erreur HTTP ${response.status}`;
+    console.error('Détail erreur Gemini:',errorData);
+    throw new Error(msg);
   }
   const data=await response.json();
   const txt=data.candidates?.[0]?.content?.parts?.[0]?.text||'[]';
