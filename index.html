@@ -95,6 +95,8 @@ details[open] .chev{transform:rotate(90deg)}
 .catlist button b{margin-left:auto;color:var(--accent-d)}
 .keyin{width:100%;padding:13px 18px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);outline:0}
 .keyin:focus{border-color:var(--accent)}
+.chip.perm{box-shadow:inset 0 0 0 2px var(--gold)}
+.chip.perm .pin{background:#f6e7c1}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -207,13 +209,14 @@ let tT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('sh
 const KEY='cuisine-v1';
 let S=load();
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.stock){
-    if(d.staples){d.staples.filter(x=>x.on).forEach(x=>{if(!d.stock.some(y=>norm(y.name)===norm(x.name)))d.stock.push({name:x.name,category:CATS[4].n})});delete d.staples}
+    if(d.staples){d.staples.filter(x=>x.on).forEach(x=>{if(!d.stock.some(y=>norm(y.name)===norm(x.name)))d.stock.push({name:x.name,category:CATS[4].n,perm:true})});delete d.staples}
+    d.stock.forEach(x=>{if(x.perm===undefined&&DEF_STAPLES.some(n=>norm(n)===norm(x.name)))x.perm=true});
     return d}}catch(e){}
-  return{stock:[...DEMO_STOCK,...DEF_STAPLES.map(name=>({name,category:CATS[4].n}))],filters:[],aiRecipes:null,apiKey:''}}
+  return{stock:[...DEMO_STOCK,...DEF_STAPLES.map(name=>({name,category:CATS[4].n,perm:true}))],filters:[],aiRecipes:null,apiKey:''}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ============ COUCHE IA (Google Gemini) – fonctions isolées ============ */
-const GEMINI_MODEL='gemini-2.0-flash';
+const GEMINI_MODEL='gemini-2.5-flash';
 const PROMPT_VISION=`Analyse cette image de liste/ticket/frigo. Extrais uniquement les aliments comestibles. Standardise chaque nom : au singulier, en français, sans marque, sans poids ni volume (ex: écrire 'Tomate' et JAMAIS 'Tomates cerises bio 500g'). Associe chaque aliment à l'une des 8 catégories définies : ${CATS.map(c=>c.n).join(' | ')}. Réponds au format JSON strict : [{"name": "Tomate", "category": "Légumes & Fruits"}]`;
 const promptRecipes=list=>`À partir de cet inventaire d'aliments : [${list.join(', ')}], propose 4 recettes réelles et populaires. Priorise les recettes utilisant le maximum d'ingrédients du stock. Le champ theme doit être l'un de : Ultra-rapide, Plat du quotidien, Apéro, Dessert, Boisson, Anti-gaspi, De saison, Réconfort, Léger, One-pot. Réponds au format JSON strict : [{"title":"Nom de la recette","prepTime":"15 min","theme":"Ultra-rapide","usedIngredients":["Tomate","Féta"],"missingIngredients":["Huile d'olive"],"recipeUrl":"https://www.marmiton.org/recettes/recherche.aspx?aqt=tomate+feta"}]`;
 
@@ -255,7 +258,7 @@ function renderStock(){
   $('#cats').innerHTML=CATS.map(c=>{
     const items=S.stock.filter(s=>s.category===c.n);
     return `<details class="cat" open style="--c:${c.c};--bgc:${c.bg}"><summary><span>${c.i}</span><span>${c.n}</span><span class="n">${items.length}</span><span class="chev">›</span></summary>
-    <div class="chips">${items.length?items.map(s=>`<span class="chip" style="--bgc:${c.bg}"><span class="nm" role="button" tabindex="0" data-edit="${esc(s.name)}" title="Changer de catégorie">${esc(s.name)}</span><button data-rm="${esc(s.name)}" aria-label="Supprimer ${esc(s.name)}">✕</button></span>`).join(''):'<span class="empty">Rien ici pour l\'instant</span>'}</div></details>`}).join('');
+    <div class="chips">${items.length?items.map(s=>`<span class="chip${s.perm?' perm':''}" style="--bgc:${c.bg}"><span class="nm" role="button" tabindex="0" data-edit="${esc(s.name)}" title="Changer de catégorie">${esc(s.name)}</span><button class="pin" data-pin="${esc(s.name)}" aria-pressed="${!!s.perm}" aria-label="${s.perm?'Rendre normal':'Rendre permanent'} : ${esc(s.name)}" title="${s.perm?'Permanent (ne s\'épuise pas)':'Marquer comme permanent'}">${s.perm?'📌':'📍'}</button><button data-rm="${esc(s.name)}" aria-label="Supprimer ${esc(s.name)}">✕</button></span>`).join(''):'<span class="empty">Rien ici pour l\'instant</span>'}</div></details>`}).join('');
 }
 
 /* ============ RECETTES ============ */
@@ -287,8 +290,8 @@ function renderRecipes(){
 function cook(title,card){
   const r=(S.aiRecipes||MOCK).find(x=>x.title===title);if(!r)return;
   const names=new Set(r.ingredients.map(norm));
-  const gone=S.stock.filter(s=>names.has(norm(s.name)));
-  S.stock=S.stock.filter(s=>!names.has(norm(s.name)));save();
+  const gone=S.stock.filter(s=>names.has(norm(s.name))&&!s.perm);   // les permanents (perm:true) restent
+  S.stock=S.stock.filter(s=>!names.has(norm(s.name))||s.perm);save();
   card.classList.add('done');
   toast(`🍽️ Bon appétit ! ${gone.length} ingrédient${gone.length>1?'s':''} retiré${gone.length>1?'s':''} du stock`);
   setTimeout(()=>{renderStock();renderRecipes()},900);
@@ -336,11 +339,15 @@ function openCat(name){editing=name;const it=S.stock.find(x=>x.name===name);if(!
 function setCat(cat){const it=S.stock.find(x=>x.name===editing);if(it){it.category=cat;save();renderStock();toast(`${it.name} → ${cat}`)}closeAll()}
 function openKey(){$('#keyIn').value=S.apiKey||'';$('#keyState').textContent=S.apiKey?'IA activée (clé enregistrée).':'Mode démo (aucune clé enregistrée).';openM('#keyModal');setTimeout(()=>$('#keyIn').focus(),60)}
 
+function togglePerm(name){const it=S.stock.find(x=>x.name===name);if(!it)return;it.perm=!it.perm;save();renderStock();
+  toast(it.perm?`📌 ${it.name} est maintenant permanent`:`📍 ${it.name} n'est plus permanent`)}
+
 /* ============ ÉVÉNEMENTS ============ */
 document.addEventListener('click',e=>{
   const ed=e.target.closest('[data-edit]');if(ed){openCat(ed.dataset.edit);return}
   const t=e.target.closest('button,a');if(!t)return;
   if(t.dataset.rm!==undefined)removeItem(t.dataset.rm,t.closest('.chip'));
+  else if(t.dataset.pin!==undefined)togglePerm(t.dataset.pin)
   else if(t.dataset.cat!==undefined)setCat(t.dataset.cat)
   else if(t.dataset.close!==undefined)closeAll()
   else if(t.dataset.f){const i=S.filters.indexOf(t.dataset.f);i<0?S.filters.push(t.dataset.f):S.filters.splice(i,1);save();renderFilters();renderRecipes()}
@@ -352,7 +359,7 @@ document.addEventListener('click',e=>{
 function quickAdd(){const i=$('#qa');if(i.value.trim()&&addItem(i.value)){toast('✓ '+cap(i.value)+' ajouté');renderStock();renderRecipes()}i.value='';i.focus()}
 $('#qa').addEventListener('keydown',e=>{if(e.key==='Enter')quickAdd()});
 $('#qaBtn').onclick=quickAdd;
-$('#clear').onclick=()=>{if(S.stock.length&&confirm('Vider tout le stock ?')){S.stock=[];save();renderStock();renderRecipes()}};
+$('#clear').onclick=()=>{if(S.stock.some(s=>!s.perm)&&confirm('Vider le stock ? Les aliments permanents 📌 sont conservés.')){S.stock=S.stock.filter(s=>s.perm);save();renderStock();renderRecipes()}};
 $('#openScan').onclick=openModal;$('#closeScan').onclick=closeModal;
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeAll()}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll();
