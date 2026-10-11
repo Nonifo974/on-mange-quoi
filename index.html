@@ -228,7 +228,7 @@ function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.stock)
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ============ COUCHE IA (Google Gemini) – fonctions isolées ============ */
-const GEMINI_MODEL='gemini-2.5-flash';
+const GEMINI_MODEL='gemini-3.8-flash';
 const PROMPT_VISION=`Analyse cette image de liste/ticket/frigo. Extrais uniquement les aliments comestibles. Standardise chaque nom : au singulier, en français, sans marque, sans poids ni volume (ex: écrire 'Tomate' et JAMAIS 'Tomates cerises bio 500g'). Associe chaque aliment à l'une des 8 catégories définies : ${CATS.map(c=>c.n).join(' | ')}. Réponds au format JSON strict : [{"name": "Tomate", "category": "Légumes & Fruits"}]`;
 const promptRecipes=list=>`À partir de cet inventaire d'aliments : [${list.join(', ')}], propose 4 recettes réelles et populaires. Priorise les recettes utilisant le maximum d'ingrédients du stock. Le champ theme contient un ou plusieurs thèmes séparés par des virgules, choisis parmi : Entrée, Plat principal, Apéro, Dessert, Boisson, Sauce, Végétarien, Cuisine du monde, Sans cuisson, Meal prep, Express, Anti-gaspi, De saison, Réconfort, Léger, One-pot, Petit budget. Réponds au format JSON strict : [{"title":"Nom de la recette","prepTime":"15 min","theme":"Ultra-rapide","usedIngredients":["Tomate","Féta"],"missingIngredients":["Huile d'olive"],"recipeUrl":"https://www.marmiton.org/recettes/recherche.aspx?aqt=tomate+feta"}]`;
 
